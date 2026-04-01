@@ -5,7 +5,7 @@ import requests
 from bs4 import BeautifulSoup
 from datetime import date, datetime
 
-S3_BUCKET: str = "torbilote-dev"
+S3_BUCKET: str = "torbilote-dev-my-s3-bucket "
 
 HEADERS: dict[str, str] = {
     "User-Agent": (
@@ -94,7 +94,6 @@ def scrape_listing_page(page: dict) -> dict:
 def save_to_s3(records: list[dict], batch_index: int):
     import pandas as pd
     
-    #TODO: amend S3 key structure to match your needs (e.g. add category_id, timestamp, etc.)
     today    = date.today()
     s3_key   = (
         f"prices/year={today.year}/month={today.month:02d}"

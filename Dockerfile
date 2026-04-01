@@ -10,9 +10,7 @@ RUN pip install -r requirements.txt --no-cache-dir \
     --python-version 3.11 \
     --only-binary=:all:
  
-COPY orchestrator.py ${LAMBDA_TASK_ROOT}/
-COPY worker.py ${LAMBDA_TASK_ROOT}/
-COPY test.py ${LAMBDA_TASK_ROOT}/
+COPY app/orchestrator/handler.py ${LAMBDA_TASK_ROOT}/
  
-CMD ["orchestrator.handler"]
+CMD ["handler.handler"]
  
