@@ -1,9 +1,6 @@
 import json
-import random
-import time
-
-import boto3
 import cloudscraper
+import boto3
 from bs4 import BeautifulSoup
 from loguru import logger
 
@@ -26,10 +23,26 @@ CATEGORIES: list[dict] = [
         "pagination_class": "eqRsIL",
     },
 ]
+PROXIES = [
+    'http://zkwvadnm:zdirzi2wtn11@31.59.20.176:6754/',
+    # 'http://zkwvadnm:zdirzi2wtn11@23.95.150.145:6114/',
+    # 'http://zkwvadnm:zdirzi2wtn11@198.23.239.134:6540/',
+    # 'http://zkwvadnm:zdirzi2wtn11@45.38.107.97:6014/',
+    # 'http://zkwvadnm:zdirzi2wtn11@107.172.163.27:6543/',
+    # 'http://zkwvadnm:zdirzi2wtn11@198.105.121.200:6462/',
+    # 'http://zkwvadnm:zdirzi2wtn11@216.10.27.159:6837/',
+    # 'http://zkwvadnm:zdirzi2wtn11@142.111.67.146:5611/',
+    # 'http://zkwvadnm:zdirzi2wtn11@191.96.254.138:6185/',
+    # 'http://zkwvadnm:zdirzi2wtn11@31.58.9.4:6077/',
+]
 
-sqs_client = boto3.client("sqs")
-session = cloudscraper.create_scraper()
-
+# sqs_client = boto3.client("sqs")
+session = cloudscraper.create_scraper(
+    rotating_proxies=PROXIES,
+    interpreter='js2py',
+    enable_stealth=True,
+    browser='chrome'
+    )
 
 def fetch_page_count(
     url: str, pagination_class: str, session: cloudscraper.CloudScraper
@@ -62,12 +75,12 @@ def chunk_list(
     return [urls[i : i + batch_size] for i in range(0, len(urls), batch_size)]
 
 
-def send_message_to_sqs(message: list[str], **kwargs) -> None:
-    """Send a message to SQS."""
-    sqs_client.send_message(
-        QueueUrl=SQS_QUEUE_URL,
-        MessageBody=json.dumps({"pages": message, **kwargs}),
-    )
+# def send_message_to_sqs(message: list[str], **kwargs) -> None:
+#     """Send a message to SQS."""
+#     sqs_client.send_message(
+#         QueueUrl=SQS_QUEUE_URL,
+#         MessageBody=json.dumps({"pages": message, **kwargs}),
+#     )
 
 
 def handler(_event, _context):
@@ -88,10 +101,8 @@ def handler(_event, _context):
         )
 
         for idx, batch in enumerate(batches, 1):
-            send_message_to_sqs(batch, category_name=category_name)
+            # send_message_to_sqs(batch, category_name=category_name)
             logger.info(f"[{category_name}] Sent batch {idx}/{len(batches)}")
-
-        time.sleep(random.uniform(1.5, 3.5))
 
     return {"statusCode": 200, "body": "OK"}
 
