@@ -16,7 +16,8 @@ RUN uv export --no-dev --no-hashes -o requirements.txt && \
 ENV UV_NO_DEV=1
 
 # Set the CMD to your handler (could also be done as a parameter override outside of the Dockerfile)
-CMD [ "test.handler" ]
+CMD [ "app/orchestrator/test.handler" ]
+
 
 
 # You can then locally test your function using the docker build and docker run commands.
