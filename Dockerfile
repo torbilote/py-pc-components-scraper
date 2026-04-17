@@ -15,6 +15,7 @@ RUN uv export --no-dev --no-hashes -o requirements.txt && \
 # Disable development dependencies
 ENV UV_NO_DEV=1
 
+
 # Set the CMD to your handler (could also be done as a parameter override outside of the Dockerfile)
 CMD [ "app/orchestrator/test.handler" ]
 
@@ -25,7 +26,10 @@ CMD [ "app/orchestrator/test.handler" ]
 # docker build -t <image name> .
 
 # To run your image locally:
-# docker run -p 9000:8080 <image name>
+# docker run -p 9000:8080 -e PROXY_URL_1=aaa -e PROXY_URL_2=bbb <image name>
 
 # In a separate terminal, you can then locally invoke the function using cURL:
 # curl -XPOST "http://localhost:9000/2015-03-31/functions/function/invocations" -d '{"payload":"hello world!"}'
+
+# Run this to build the image properly for AWS Lambda 
+# docker build -t torbilote-dev/py-pc-components-scraper --provenance=false --platform linux/amd64 .
