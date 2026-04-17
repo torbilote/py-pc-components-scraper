@@ -11,6 +11,7 @@ dependencies = [
     "botocore[crt]>=1.42.68",
     "loguru>=0.7.3",
     "ai-cloudscraper>=3.8.4",
+    "python-dotenv>=1.2.2",
 ]
 
 [dependency-groups]
