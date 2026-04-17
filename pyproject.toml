@@ -3,13 +3,14 @@ name = "py-pc-components-scraper"
 version = "0.1.0"
 description = "Add your description here"
 readme = "README.md"
-requires-python = ">=3.14"
+requires-python = ">=3.13"
 dependencies = [
     "beautifulsoup4>=4.14.3",
     "lxml>=6.0.2",
     "boto3>=1.42.68",
     "botocore[crt]>=1.42.68",
     "loguru>=0.7.3",
+    "ai-cloudscraper>=3.8.4",
 ]
 
 [dependency-groups]
