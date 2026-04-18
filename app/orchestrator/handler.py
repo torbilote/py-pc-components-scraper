@@ -1,11 +1,16 @@
 import json
-import cloudscraper
+import os
+from time import sleep
+
 import boto3
+import cloudscraper
 from bs4 import BeautifulSoup
+from dotenv import load_dotenv
 from loguru import logger
 
-BATCH_SIZE: int = 3
-SQS_QUEUE_URL: str = "https://sqs.eu-north-1.amazonaws.com/335721753558/py-pc-components-scraper-sqs"
+load_dotenv()
+
+BATCH_SIZE: int = 30
 CATEGORIES: list[dict] = [
     {
         "name": "gpu",
@@ -23,43 +28,27 @@ CATEGORIES: list[dict] = [
         "pagination_class": "eqRsIL",
     },
 ]
-PROXIES = [
-    'http://zkwvadnm:zdirzi2wtn11@31.59.20.176:6754/',
-    # 'http://zkwvadnm:zdirzi2wtn11@23.95.150.145:6114/',
-    # 'http://zkwvadnm:zdirzi2wtn11@198.23.239.134:6540/',
-    # 'http://zkwvadnm:zdirzi2wtn11@45.38.107.97:6014/',
-    # 'http://zkwvadnm:zdirzi2wtn11@107.172.163.27:6543/',
-    # 'http://zkwvadnm:zdirzi2wtn11@198.105.121.200:6462/',
-    # 'http://zkwvadnm:zdirzi2wtn11@216.10.27.159:6837/',
-    # 'http://zkwvadnm:zdirzi2wtn11@142.111.67.146:5611/',
-    # 'http://zkwvadnm:zdirzi2wtn11@191.96.254.138:6185/',
-    # 'http://zkwvadnm:zdirzi2wtn11@31.58.9.4:6077/',
-]
 
-# sqs_client = boto3.client("sqs")
-session = cloudscraper.create_scraper(
-    rotating_proxies=PROXIES,
-    interpreter='js2py',
-    enable_stealth=True,
-    browser='chrome'
+
+def fetch_page_count(url: str, pagination_class: str) -> int:
+    """Fetch the page count."""
+    proxies = [os.getenv(f"PROXY_URL_{i}", None) for i in range(1, 2)]
+
+    scraper = cloudscraper.create_scraper(
+        cookie_storage_dir="/tmp/cookies",
+        rotating_proxies=proxies if proxies else None,
+        circuit_failure_threshold=3,
+        circuit_timeout=60,
     )
 
-def fetch_page_count(
-    url: str, pagination_class: str, session: cloudscraper.CloudScraper
-) -> int:
-    """Fetch the page count."""
-    response = session.get(url, timeout=15)
+    response = scraper.get(url)
     response.raise_for_status()
 
     soup = BeautifulSoup(response.text, "lxml")
     elements = soup.find_all(class_=pagination_class)
 
-    if not elements:
-        raise ValueError(
-            f"No pagination elements found (class='{pagination_class}') on {url}"
-        )
-
     page_numbers = [int(el.get_text(strip=True)) for el in elements]
+
     return max(page_numbers)
 
 
@@ -75,38 +64,47 @@ def chunk_list(
     return [urls[i : i + batch_size] for i in range(0, len(urls), batch_size)]
 
 
-# def send_message_to_sqs(message: list[str], **kwargs) -> None:
-#     """Send a message to SQS."""
-#     sqs_client.send_message(
-#         QueueUrl=SQS_QUEUE_URL,
-#         MessageBody=json.dumps({"pages": message, **kwargs}),
-#     )
+def send_message_to_sqs(message: list[str], **kwargs) -> None:
+    """Send a message to SQS."""
+    client = boto3.client("sqs")
+    sqs_queue_url = os.getenv("SQS_QUEUE_URL")
+
+    client.send_message(
+        QueueUrl=sqs_queue_url,
+        MessageBody=json.dumps({"data": message, **kwargs}),
+    )
 
 
 def handler(_event, _context):
     """AWS Lambda entry point."""
+    logger.info("Starting orchestrator handler")
 
     for category in CATEGORIES:
         category_name = category["name"]
         base_url = category["base_url"]
         pagination_class = category["pagination_class"]
+        logger.info(f"Processing category: {category_name}")
 
-        page_count = fetch_page_count(base_url, pagination_class, session)
-        logger.info(f"[{category_name}] {page_count} pages found.")
+        page_count = fetch_page_count(base_url, pagination_class)
+        logger.info(f"Fetched {page_count} pages")
 
         urls = generate_urls(base_url, page_count)
+        logger.info(f"Generated {len(urls)} URLs")
+
         batches = chunk_list(urls)
-        logger.info(
-            f"[{category_name}] {len(urls)} URLs split into {len(batches)} batches."
-        )
+        logger.info(f"Created {len(batches)} batches")
 
-        for idx, batch in enumerate(batches, 1):
-            # send_message_to_sqs(batch, category_name=category_name)
-            logger.info(f"[{category_name}] Sent batch {idx}/{len(batches)}")
+        for idx, batch_of_url_list in enumerate(batches, 1):
+            send_message_to_sqs(
+                message=batch_of_url_list, category_name=category_name
+            )
+            logger.info(f"Sent batch {idx} with {len(batch_of_url_list)} URLs to SQS")
 
+        sleep(1.0)
+        logger.info("Sleeping for 1 second to avoid rate limiting")
+
+    logger.info("Completed processing all categories")
     return {"statusCode": 200, "body": "OK"}
 
-
-# For local testing
 if __name__ == "__main__":
     handler({}, {})
