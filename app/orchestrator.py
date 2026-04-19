@@ -7,8 +7,16 @@ import cloudscraper
 from bs4 import BeautifulSoup
 from dotenv import load_dotenv
 from loguru import logger
+from requests import Response
 
 load_dotenv()
+
+os.environ["AWS_REGION"] = "eu-north-1"
+
+PROXY_URL_1: str = os.environ["PROXY_URL_1"] # necessary
+PROXY_URL_2: str = os.getenv("PROXY_URL_2") # optional
+PROXY_URL_3: str = os.getenv("PROXY_URL_3") # optional
+SQS_QUEUE_URL: str = os.environ["SQS_QUEUE_URL"]
 
 BATCH_SIZE: int = 30
 CATEGORIES: list[dict] = [
@@ -32,16 +40,16 @@ CATEGORIES: list[dict] = [
 
 def fetch_page_count(url: str, pagination_class: str) -> int:
     """Fetch the page count."""
-    proxies = [os.getenv(f"PROXY_URL_{i}", None) for i in range(1, 2)]
+    proxies = [proxy for proxy in [PROXY_URL_1, PROXY_URL_2, PROXY_URL_3] if proxy]
 
     scraper = cloudscraper.create_scraper(
         cookie_storage_dir="/tmp/cookies",
-        rotating_proxies=proxies if proxies else None,
+        rotating_proxies=proxies,
         circuit_failure_threshold=3,
         circuit_timeout=60,
     )
 
-    response = scraper.get(url)
+    response: Response = scraper.get(url)
     response.raise_for_status()
 
     soup = BeautifulSoup(response.text, "lxml")
@@ -64,18 +72,16 @@ def chunk_list(
     return [urls[i : i + batch_size] for i in range(0, len(urls), batch_size)]
 
 
-def send_message_to_sqs(message: list[str], **kwargs) -> None:
+def send_message_to_sqs(message: dict) -> None:
     """Send a message to SQS."""
     client = boto3.client("sqs")
-    sqs_queue_url = os.getenv("SQS_QUEUE_URL")
-
     client.send_message(
-        QueueUrl=sqs_queue_url,
-        MessageBody=json.dumps({"data": message, **kwargs}),
+        QueueUrl=SQS_QUEUE_URL,
+        MessageBody=json.dumps(message),
     )
 
 
-def handler(_event, _context):
+def handler(_event, _context) -> dict:
     """AWS Lambda entry point."""
     logger.info("Starting orchestrator handler")
 
@@ -95,16 +101,19 @@ def handler(_event, _context):
         logger.info(f"Created {len(batches)} batches")
 
         for idx, batch_of_url_list in enumerate(batches, 1):
-            send_message_to_sqs(
-                message=batch_of_url_list, category_name=category_name
-            )
+            message = {
+                "category_name": category_name,
+                "urls": batch_of_url_list,
+                "batch_index": idx,
+            }
+            send_message_to_sqs(message)
             logger.info(f"Sent batch {idx} with {len(batch_of_url_list)} URLs to SQS")
 
-        sleep(1.0)
-        logger.info("Sleeping for 1 second to avoid rate limiting")
+        sleep(5.0)
+        logger.info("Sleeping for 5 seconds to avoid rate limiting")
 
     logger.info("Completed processing all categories")
-    return {"statusCode": 200, "body": "OK"}
+    return {"completed": "true"}
 
 if __name__ == "__main__":
     handler({}, {})

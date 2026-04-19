@@ -17,7 +17,7 @@ ENV UV_NO_DEV=1
 
 
 # Set the CMD to your handler (could also be done as a parameter override outside of the Dockerfile)
-CMD [ "app/orchestrator/handler.handler" ]
+CMD [ "app/orchestrator.handler" ]
 
 
 
