@@ -21,15 +21,3 @@ CMD [ "app/orchestrator.handler" ]
 
 
 
-# You can then locally test your function using the docker build and docker run commands.
-# To build you image:
-# docker build -t <image name> .
-
-# To run your image locally:
-# docker run -p 9000:8080 -e PROXY_URL_1=aaa -e PROXY_URL_2=bbb <image name>
-
-# In a separate terminal, you can then locally invoke the function using cURL:
-# curl -XPOST "http://localhost:9000/2015-03-31/functions/function/invocations" -d '{"payload":"hello world!"}'
-
-# Run this to build the image properly for AWS Lambda 
-# docker build -t torbilote-dev/py-pc-components-scraper --provenance=false --platform linux/amd64 .
