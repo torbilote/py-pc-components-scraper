@@ -5,7 +5,7 @@ from datetime import UTC, datetime
 
 import boto3
 from bs4 import BeautifulSoup
-from cloudscraper.session_pool import SessionPool
+import cloudscraper
 from dotenv import load_dotenv
 from loguru import logger
 from requests import Response
@@ -19,33 +19,12 @@ PROXY_URL_3: str = os.getenv("PROXY_URL_3")  # optional
 
 S3_BUCKET: str = os.environ["S3_BUCKET"]
 
-PRODUCT_CLASS: str = "<class name>"
-PRODUCTS_ATTRIBTUES_CLASSES: dict = {
-    "gpu": {
-        "full_name": "<class name>",
-        "price": "<class name>",
-        "model": "<class name>",
-        "memory": "<class name>",
-        "memory_type": "<class name>",
-    },
-    "cpu": {
-        "full_name": "<class name>",
-        "price": "<class name>",
-        "socket": "<class name>",
-        "clock_speed": "<class name>",
-        "cores_count": "<class name>",
-        "cache_size": "<class name>",
-    },
-    "ssd": {
-        "full_name": "<class name>",
-        "price": "<class name>",
-        "size": "<class name>",
-        "interface": "<class name>",
-        "read_speed": "<class name>",
-        "write_speed": "<class name>",
-    },
+PRODUCT_CONTAINER_CLASS: str = "gDPdFR"
+PRODUCT_ATTRIBUTES_CLASSES: dict = {
+    "full_name": "eyGQAu",
+    "price": "looiKE",
+    "secondary_attributes": "dpmgFj",
 }
-
 
 def scrape_page(category_name: str, urls: list[str]) -> list[dict]:
     """Scrape data from provided urls, combine the results and return the data."""
@@ -57,13 +36,11 @@ def scrape_page(category_name: str, urls: list[str]) -> list[dict]:
         proxy for proxy in [PROXY_URL_1, PROXY_URL_2, PROXY_URL_3] if proxy
     ]
 
-    scraper_session = SessionPool(
-        pool_size=3,
-        rotation_strategy="least_used",
+    scraper = cloudscraper.create_scraper(
         cookie_storage_dir="/tmp/cookies",
         rotating_proxies=proxies,
         circuit_failure_threshold=3,
-        circuit_timeout=60,
+        circuit_timeout=5,
     )
 
     data: list[dict[str, str]] = []
@@ -75,26 +52,40 @@ def scrape_page(category_name: str, urls: list[str]) -> list[dict]:
 
     for url in urls:
         logger.info(f"Fetching URL: {url}")
-        response: Response = scraper_session.get(url)
+        response: Response = scraper.get(url)
         response.raise_for_status()
         logger.info(
             f"Fetched URL {url} with status_code={response.status_code}"
         )
 
         soup = BeautifulSoup(response.text, "lxml")
-        products = soup.find_all(class_=PRODUCT_CLASS)
+        products = soup.find_all(class_=PRODUCT_CONTAINER_CLASS)
         logger.info(f"Found {len(products)} products on URL: {url}")
 
-        for product_index, product in enumerate(products, start=1):
-            logger.info(f"Parsing product #{product_index} from URL: {url}")
-            attributes = PRODUCTS_ATTRIBTUES_CLASSES[category_name]
-            product_data = {}
+        for product in products:
+            product_data = {"category": category_name}
 
-            for attribute_name, class_name in attributes.items():
-                product_data[attribute_name] = product.find(
-                    class_=class_name
-                ).get_text(strip=True)
+            product_data['full_name'] = product.find(class_=PRODUCT_ATTRIBUTES_CLASSES['full_name']).get_text(strip=True)
+            product_data['price'] = product.find(class_=PRODUCT_ATTRIBUTES_CLASSES['price']).get_text(strip=True)
 
+            secondary_attributes = product.find_all(class_=PRODUCT_ATTRIBUTES_CLASSES['secondary_attributes'])
+
+            if category_name == "gpu":
+                product_data['model'] = secondary_attributes[0].get_text(strip=True)
+                product_data['memory'] = secondary_attributes[1].get_text(strip=True)
+                product_data['memory_type'] = secondary_attributes[2].get_text(strip=True)
+
+            elif category_name == "cpu":
+                product_data['socket'] = secondary_attributes[0].get_text(strip=True)
+                product_data['clock_speed'] = secondary_attributes[1].get_text(strip=True)
+                product_data['cores'] = secondary_attributes[2].get_text(strip=True)
+
+            elif category_name == "ssd":
+                product_data['size'] = secondary_attributes[0].get_text(strip=True)
+                product_data['interface'] = secondary_attributes[1].get_text(strip=True)
+                product_data['read_speed'] = secondary_attributes[2].get_text(strip=True)
+                product_data['write_speed'] = secondary_attributes[3].get_text(strip=True)
+                
             data.append(product_data)
 
     logger.info(
@@ -142,12 +133,12 @@ def handler(event, _context) -> dict:
         f"Received SQS message sent at {sqs_datetime.strftime('%Y-%m-%d %H:%M:%S %Z')}: {sqs_message}"
     )
 
-    if not sqs_message.get("data"):
+    if not sqs_message.get("urls"):
         logger.info("Bad Request: No data in message")
         raise ValueError("Bad Request: No data in message")
 
     category_name: str = sqs_message["category_name"]
-    urls: list[str] = sqs_message["data"]
+    urls: list[str] = sqs_message["urls"]
 
     logger.info(f"Processing category={category_name} with {len(urls)} urls")
     data = scrape_page(category_name, urls)
@@ -167,4 +158,23 @@ def handler(event, _context) -> dict:
 
 
 if __name__ == "__main__":
-    handler({}, {})
+    lambda_invocation_event_obj = {
+        "Records": [
+            {
+                "messageId": "059f36b4-87a3-44ab-83d2-661975830a7d",
+                "receiptHandle": "AQEBwJnKyrHigUMZj6reyNu4...",
+                "body": "{\"category_name\": \"gpu\",\"urls\": [\"https://www.x-kom.pl/g-5/c/345-karty-graficzne.html?page=1\", \"https://www.x-kom.pl/g-5/c/345-karty-graficzne.html?page=2\"],\"batch_index\": 1}",
+                "attributes": {
+                    "ApproximateReceiveCount": "1",
+                    "SentTimestamp": "1545082650636"
+                },
+                "messageAttributes": {},
+                "md5OfBody": "e4e68fb7bd0e697a0ae8f1bb342846b0",
+                "eventSource": "aws:sqs",
+                "eventSourceARN": "arn:aws:sqs:eu-north-1:335721753558:py-pc-components-scraper-sqs",
+                "awsRegion": "eu-north-1"
+            }
+        ]
+    }
+
+    handler(lambda_invocation_event_obj, None)
