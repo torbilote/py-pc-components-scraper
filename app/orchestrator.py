@@ -13,9 +13,9 @@ load_dotenv()
 
 os.environ["AWS_REGION"] = "eu-north-1"
 
-PROXY_URL_1: str = os.environ["PROXY_URL_1"] # necessary
-PROXY_URL_2: str = os.getenv("PROXY_URL_2") # optional
-PROXY_URL_3: str = os.getenv("PROXY_URL_3") # optional
+PROXY_URL_1: str = os.environ["PROXY_URL_1"]  # necessary
+PROXY_URL_2: str = os.getenv("PROXY_URL_2")  # optional
+PROXY_URL_3: str = os.getenv("PROXY_URL_3")  # optional
 SQS_QUEUE_URL: str = os.environ["SQS_QUEUE_URL"]
 
 BATCH_SIZE: int = 30
@@ -40,7 +40,9 @@ CATEGORIES: list[dict] = [
 
 def fetch_page_count(url: str, pagination_class: str) -> int:
     """Fetch the page count."""
-    proxies = [proxy for proxy in [PROXY_URL_1, PROXY_URL_2, PROXY_URL_3] if proxy]
+    proxies = [
+        proxy for proxy in [PROXY_URL_1, PROXY_URL_2, PROXY_URL_3] if proxy
+    ]
 
     scraper = cloudscraper.create_scraper(
         cookie_storage_dir="/tmp/cookies",
@@ -83,7 +85,7 @@ def send_message_to_sqs(message: dict) -> None:
 
 def handler(_event, _context) -> dict:
     """AWS Lambda entry point."""
-    logger.info("Starting orchestrator handler")
+    logger.info("Starting orchestrator")
 
     for category in CATEGORIES:
         category_name = category["name"]
@@ -107,13 +109,16 @@ def handler(_event, _context) -> dict:
                 "batch_index": idx,
             }
             send_message_to_sqs(message)
-            logger.info(f"Sent batch {idx} with {len(batch_of_url_list)} URLs to SQS")
+            logger.info(
+                f"Sent batch {idx} with {len(batch_of_url_list)} URLs to SQS"
+            )
 
         sleep(5.0)
         logger.info("Sleeping for 5 seconds to avoid rate limiting")
 
     logger.info("Completed processing all categories")
     return {"completed": "true"}
+
 
 if __name__ == "__main__":
     handler({}, {})
