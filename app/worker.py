@@ -24,10 +24,10 @@ PRODUCT_FULL_NAME_CLASS: str = "eyGQAu"
 PRODUCT_PRICE_CLASS: str = "looiKE"
 PRODUCT_SECONDARY_ATTRIBUTES_CLASS: str = "dpmgFj"
 
-def scrape_page(category_name: str, urls: list[str]) -> list[dict]:
+def scrape_page(category_name: str, date: str,urls: list[str]) -> list[dict]:
     """Scrape data from provided urls, combine the results and return the data."""
     logger.info(
-        f"Starting scrape_page for category={category_name} with {len(urls)} urls"
+        f"Starting scrape_page for category={category_name} with {len(urls)} urls for date={date}"
     )
 
     proxies = [
@@ -61,8 +61,10 @@ def scrape_page(category_name: str, urls: list[str]) -> list[dict]:
         logger.info(f"Found {len(products)} products on URL: {url}")
 
         for product in products:
-            product_data = {"category": category_name}
+            product_data = {}
 
+            product_data['category'] = category_name
+            product_data['date'] = date
             product_data['full_name'] = product.find(class_=PRODUCT_FULL_NAME_CLASS).get_text(strip=True)
             product_data['price'] = product.find(class_=PRODUCT_PRICE_CLASS).get_text(strip=True)
 
@@ -94,8 +96,8 @@ def scrape_page(category_name: str, urls: list[str]) -> list[dict]:
 
 def upload_to_s3(category_name: str, sqs_date: str, data: list[dict]) -> None:
     """Upload data to S3 in CSV format."""
-    s3_key = f"py-pc-components-scraper/scraped-data/{category_name}/{sqs_date}/data.csv"
-    tmp_path = f"/tmp/files/{category_name}_{sqs_date}_data.csv"
+    s3_key = f"py-pc-components-scraper/scraped-data/{category_name}/{sqs_date}/{sqs_date}-{category_name}.csv"
+    tmp_path = f"/tmp/files/{category_name}-{sqs_date}.csv"
 
     logger.info(
         f"Preparing upload for category={category_name}, date={sqs_date}, records={len(data)}"
@@ -127,6 +129,7 @@ def handler(event, _context) -> dict:
     sqs_datetime: datetime = datetime.fromtimestamp(
         int(sqs_timestamp) / 1000, tz=UTC
     )
+    sqs_date: str = sqs_datetime.strftime("%Y%m%d")
     logger.info(
         f"Received SQS message sent at {sqs_datetime.strftime('%Y-%m-%d %H:%M:%S %Z')}: {sqs_message}"
     )
@@ -139,13 +142,13 @@ def handler(event, _context) -> dict:
     urls: list[str] = sqs_message["urls"]
 
     logger.info(f"Processing category={category_name} with {len(urls)} urls")
-    data = scrape_page(category_name, urls)
+    data = scrape_page(category_name, sqs_date, urls)
 
     if not data:
         logger.info("No data scraped from the page")
         raise ValueError("No data scraped from the page")
 
-    sqs_date: str = sqs_datetime.strftime("%Y%m%d")
+    
     logger.info(
         f"Uploading scraped data for category={category_name} and date={sqs_date}"
     )
