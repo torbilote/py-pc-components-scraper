@@ -20,11 +20,9 @@ PROXY_URL_3: str = os.getenv("PROXY_URL_3")  # optional
 S3_BUCKET: str = os.environ["S3_BUCKET"]
 
 PRODUCT_CONTAINER_CLASS: str = "gDPdFR"
-PRODUCT_ATTRIBUTES_CLASSES: dict = {
-    "full_name": "eyGQAu",
-    "price": "looiKE",
-    "secondary_attributes": "dpmgFj",
-}
+PRODUCT_FULL_NAME_CLASS: str = "eyGQAu"
+PRODUCT_PRICE_CLASS: str = "looiKE"
+PRODUCT_SECONDARY_ATTRIBUTES_CLASS: str = "dpmgFj"
 
 def scrape_page(category_name: str, urls: list[str]) -> list[dict]:
     """Scrape data from provided urls, combine the results and return the data."""
@@ -65,10 +63,10 @@ def scrape_page(category_name: str, urls: list[str]) -> list[dict]:
         for product in products:
             product_data = {"category": category_name}
 
-            product_data['full_name'] = product.find(class_=PRODUCT_ATTRIBUTES_CLASSES['full_name']).get_text(strip=True)
-            product_data['price'] = product.find(class_=PRODUCT_ATTRIBUTES_CLASSES['price']).get_text(strip=True)
+            product_data['full_name'] = product.find(class_=PRODUCT_FULL_NAME_CLASS).get_text(strip=True)
+            product_data['price'] = product.find(class_=PRODUCT_PRICE_CLASS).get_text(strip=True)
 
-            secondary_attributes = product.find_all(class_=PRODUCT_ATTRIBUTES_CLASSES['secondary_attributes'])
+            secondary_attributes = product.find_all(class_=PRODUCT_SECONDARY_ATTRIBUTES_CLASS)
 
             if category_name == "gpu":
                 product_data['model'] = secondary_attributes[0].get_text(strip=True)
