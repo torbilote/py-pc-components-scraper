@@ -47,6 +47,8 @@ def fetch_page_count(url: str, pagination_class: str) -> int:
     scraper = cloudscraper.create_scraper(
         cookie_storage_dir="/tmp/cookies",
         rotating_proxies=proxies,
+        circuit_failure_threshold=3,
+        circuit_timeout=60,
     )
 
     response: Response = scraper.get(url)
@@ -116,8 +118,8 @@ def handler(_event, _context) -> dict:
                 f"Sent batch {idx} with {len(batch_of_url_list)} URLs to SQS"
             )
 
-        sleep(5.0)
         logger.info("Sleeping for 5 seconds to avoid rate limiting")
+        sleep(5.0)
 
     logger.info("Completed processing all categories")
     return {"completed": "true"}

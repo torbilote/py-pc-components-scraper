@@ -39,6 +39,8 @@ def scrape_page(category_name: str, date: str, urls: list[str]) -> list[dict]:
     scraper = cloudscraper.create_scraper(
         cookie_storage_dir="/tmp/cookies",
         rotating_proxies=proxies,
+        circuit_failure_threshold=3,
+        circuit_timeout=60,
     )
 
     data: list[dict[str, str]] = []
@@ -107,9 +109,8 @@ def scrape_page(category_name: str, date: str, urls: list[str]) -> list[dict]:
 
             data.append(product_data)
 
-        sleep(
-            1
-        )  # Sleep for 1 second between requests to avoid overwhelming the server
+        logger.info("Sleeping for 1 second to avoid rate limiting")
+        sleep(1) 
 
     logger.info(
         f"Completed scrape_page for category={category_name}, total_items={len(data)}"
