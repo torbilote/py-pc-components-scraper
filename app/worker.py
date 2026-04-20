@@ -108,7 +108,8 @@ def scrape_page(category_name: str, date: str, urls: list[str]) -> list[dict]:
                 )
 
             data.append(product_data)
-
+        
+        logger.info(f"Successfully scraped data from URL: {url}, total products scraped so far: {len(data)}")
         logger.info("Sleeping for 1 second to avoid rate limiting")
         sleep(1) 
 
