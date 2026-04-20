@@ -18,7 +18,7 @@ PROXY_URL_2: str = os.getenv("PROXY_URL_2")  # optional
 PROXY_URL_3: str = os.getenv("PROXY_URL_3")  # optional
 SQS_QUEUE_URL: str = os.environ["SQS_QUEUE_URL"]
 
-BATCH_SIZE: int = 30
+BATCH_SIZE: int = 100
 CATEGORIES: list[dict] = [
     {
         "name": "gpu",
@@ -47,8 +47,6 @@ def fetch_page_count(url: str, pagination_class: str) -> int:
     scraper = cloudscraper.create_scraper(
         cookie_storage_dir="/tmp/cookies",
         rotating_proxies=proxies,
-        circuit_failure_threshold=3,
-        circuit_timeout=60,
     )
 
     response: Response = scraper.get(url)
@@ -56,6 +54,11 @@ def fetch_page_count(url: str, pagination_class: str) -> int:
 
     soup = BeautifulSoup(response.text, "lxml")
     elements = soup.find_all(class_=pagination_class)
+
+    if not elements:
+        raise ValueError(
+            f"No pagination elements found for URL: {url} with class: {pagination_class}."
+        )
 
     page_numbers = [int(el.get_text(strip=True)) for el in elements]
 

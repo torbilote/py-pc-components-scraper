@@ -4,8 +4,8 @@ import os
 from datetime import UTC, datetime
 
 import boto3
-from bs4 import BeautifulSoup
 import cloudscraper
+from bs4 import BeautifulSoup
 from dotenv import load_dotenv
 from loguru import logger
 from requests import Response
@@ -22,9 +22,10 @@ S3_BUCKET: str = os.environ["S3_BUCKET"]
 PRODUCT_CONTAINER_CLASS: str = "gDPdFR"
 PRODUCT_FULL_NAME_CLASS: str = "eyGQAu"
 PRODUCT_PRICE_CLASS: str = "looiKE"
-PRODUCT_SECONDARY_ATTRIBUTES_CLASS: str = "dpmgFj"
+PRODUCT_ATTRIBUTES_CLASS: str = "hsNyNy"
 
-def scrape_page(category_name: str, date: str,urls: list[str]) -> list[dict]:
+
+def scrape_page(category_name: str, date: str, urls: list[str]) -> list[dict]:
     """Scrape data from provided urls, combine the results and return the data."""
     logger.info(
         f"Starting scrape_page for category={category_name} with {len(urls)} urls for date={date}"
@@ -37,8 +38,6 @@ def scrape_page(category_name: str, date: str,urls: list[str]) -> list[dict]:
     scraper = cloudscraper.create_scraper(
         cookie_storage_dir="/tmp/cookies",
         rotating_proxies=proxies,
-        circuit_failure_threshold=3,
-        circuit_timeout=5,
     )
 
     data: list[dict[str, str]] = []
@@ -58,34 +57,53 @@ def scrape_page(category_name: str, date: str,urls: list[str]) -> list[dict]:
 
         soup = BeautifulSoup(response.text, "lxml")
         products = soup.find_all(class_=PRODUCT_CONTAINER_CLASS)
+
+        if not products:
+            logger.error(
+                f"No products found on URL: {url} with class: {PRODUCT_CONTAINER_CLASS}."
+            )
+            continue
+
         logger.info(f"Found {len(products)} products on URL: {url}")
 
         for product in products:
             product_data = {}
 
-            product_data['category'] = category_name
-            product_data['date'] = date
-            product_data['full_name'] = product.find(class_=PRODUCT_FULL_NAME_CLASS).get_text(strip=True)
-            product_data['price'] = product.find(class_=PRODUCT_PRICE_CLASS).get_text(strip=True)
+            product_data["category"] = category_name
+            product_data["date"] = date
 
-            secondary_attributes = product.find_all(class_=PRODUCT_SECONDARY_ATTRIBUTES_CLASS)
+            product_full_name = product.find(class_=PRODUCT_FULL_NAME_CLASS)
 
-            if category_name == "gpu":
-                product_data['model'] = secondary_attributes[0].get_text(strip=True)
-                product_data['memory'] = secondary_attributes[1].get_text(strip=True)
-                product_data['memory_type'] = secondary_attributes[2].get_text(strip=True)
+            if not product_full_name:
+                logger.error(
+                    f"Product full name not found for a product on URL: {url}. Skipping this product."
+                )
+                continue
 
-            elif category_name == "cpu":
-                product_data['socket'] = secondary_attributes[0].get_text(strip=True)
-                product_data['clock_speed'] = secondary_attributes[1].get_text(strip=True)
-                product_data['cores'] = secondary_attributes[2].get_text(strip=True)
+            product_data["full_name"] = product_full_name.get_text(strip=True)
 
-            elif category_name == "ssd":
-                product_data['size'] = secondary_attributes[0].get_text(strip=True)
-                product_data['interface'] = secondary_attributes[1].get_text(strip=True)
-                product_data['read_speed'] = secondary_attributes[2].get_text(strip=True)
-                product_data['write_speed'] = secondary_attributes[3].get_text(strip=True)
-                
+            product_price = product.find(class_=PRODUCT_PRICE_CLASS)
+
+            if not product_price:
+                logger.error(
+                    f"Product price not found for product '{product_data['full_name']}' on URL: {url}. Setting price as 'n/a'."
+                )
+                product_data["price"] = "n/a"
+            else:
+                product_data["price"] = product_price.get_text(strip=True)
+
+            product_attributes = product.find(class_=PRODUCT_ATTRIBUTES_CLASS)
+
+            if not product_attributes:
+                logger.error(
+                    f"Product attributes not found for product '{product_data['full_name']}' on URL: {url}. Setting attributes as 'n/a'."
+                )
+                product_data["attributes"] = "n/a"
+            else:
+                product_data["attributes"] = product_attributes.get_text(
+                    strip=True
+                )
+
             data.append(product_data)
 
     logger.info(
@@ -94,10 +112,14 @@ def scrape_page(category_name: str, date: str,urls: list[str]) -> list[dict]:
     return data
 
 
-def upload_to_s3(category_name: str, sqs_date: str, data: list[dict]) -> None:
+def upload_to_s3(
+    category_name: str, sqs_date: str, batch_index: int, data: list[dict]
+) -> None:
     """Upload data to S3 in CSV format."""
-    s3_key = f"py-pc-components-scraper/scraped-data/{category_name}/{sqs_date}/{sqs_date}-{category_name}.csv"
-    tmp_path = f"/tmp/files/{category_name}-{sqs_date}.csv"
+    # TODO add batch to the s3 key to avoid overwriting files when multiple batches for the same category and date are processed in parallel
+
+    s3_key = f"py-pc-components-scraper/scraped-data/{category_name}/{sqs_date}/{sqs_date}-{category_name}-{batch_index}.csv"
+    tmp_path = f"/tmp/files/{category_name}-{sqs_date}-{batch_index}.csv"
 
     logger.info(
         f"Preparing upload for category={category_name}, date={sqs_date}, records={len(data)}"
@@ -140,6 +162,7 @@ def handler(event, _context) -> dict:
 
     category_name: str = sqs_message["category_name"]
     urls: list[str] = sqs_message["urls"]
+    batch_index: int = sqs_message["batch_index"]
 
     logger.info(f"Processing category={category_name} with {len(urls)} urls")
     data = scrape_page(category_name, sqs_date, urls)
@@ -148,11 +171,10 @@ def handler(event, _context) -> dict:
         logger.info("No data scraped from the page")
         raise ValueError("No data scraped from the page")
 
-    
     logger.info(
-        f"Uploading scraped data for category={category_name} and date={sqs_date}"
+        f"Uploading scraped data for category={category_name} and date={sqs_date} with batch_index={batch_index} to S3, total_records={len(data)}"
     )
-    upload_to_s3(category_name, sqs_date, data)
+    upload_to_s3(category_name, sqs_date, batch_index, data)
 
     logger.info("Lambda handler completed successfully")
     return {"completed": "true"}
@@ -164,16 +186,16 @@ if __name__ == "__main__":
             {
                 "messageId": "059f36b4-87a3-44ab-83d2-661975830a7d",
                 "receiptHandle": "AQEBwJnKyrHigUMZj6reyNu4...",
-                "body": "{\"category_name\": \"gpu\",\"urls\": [\"https://www.x-kom.pl/g-5/c/345-karty-graficzne.html?page=1\", \"https://www.x-kom.pl/g-5/c/345-karty-graficzne.html?page=2\"],\"batch_index\": 1}",
+                "body": '{"category_name": "gpu","urls": ["https://www.x-kom.pl/g-5/c/345-karty-graficzne.html?page=1", "https://www.x-kom.pl/g-5/c/345-karty-graficzne.html?page=2"],"batch_index": 1}',
                 "attributes": {
                     "ApproximateReceiveCount": "1",
-                    "SentTimestamp": "1545082650636"
+                    "SentTimestamp": "1545082650636",
                 },
                 "messageAttributes": {},
                 "md5OfBody": "e4e68fb7bd0e697a0ae8f1bb342846b0",
                 "eventSource": "aws:sqs",
                 "eventSourceARN": "arn:aws:sqs:eu-north-1:335721753558:py-pc-components-scraper-sqs",
-                "awsRegion": "eu-north-1"
+                "awsRegion": "eu-north-1",
             }
         ]
     }
