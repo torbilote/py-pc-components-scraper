@@ -2,6 +2,7 @@ import csv
 import json
 import os
 from datetime import UTC, datetime
+from time import sleep
 
 import boto3
 import cloudscraper
@@ -105,6 +106,10 @@ def scrape_page(category_name: str, date: str, urls: list[str]) -> list[dict]:
                 )
 
             data.append(product_data)
+
+        sleep(
+            1
+        )  # Sleep for 1 second between requests to avoid overwhelming the server
 
     logger.info(
         f"Completed scrape_page for category={category_name}, total_items={len(data)}"
