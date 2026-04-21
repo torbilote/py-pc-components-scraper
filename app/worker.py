@@ -1,4 +1,5 @@
 import csv
+from csv import QUOTE_ALL as csv_quote_all
 import json
 import os
 from datetime import UTC, datetime
@@ -134,7 +135,7 @@ def upload_to_s3(
     os.makedirs(os.path.dirname(tmp_path), exist_ok=True)
 
     with open(tmp_path, mode="w", newline="", encoding="utf-8") as csvfile:
-        writer = csv.DictWriter(csvfile, fieldnames=data[0].keys())
+        writer = csv.DictWriter(csvfile, fieldnames=data[0].keys(), quoting=csv_quote_all)
         writer.writeheader()
         writer.writerows(data)
     logger.info(f"Wrote CSV file to {tmp_path}")
