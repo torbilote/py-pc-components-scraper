@@ -1,17 +1,15 @@
-import csv
 import json
 import os
 import time
-from csv import QUOTE_ALL
 from datetime import UTC, datetime
 
-from botocore.client import BaseClient
 from bs4 import BeautifulSoup, Tag
 from cloudscraper import CloudScraper
 from dotenv import load_dotenv
 from loguru import logger
+from requests import HTTPError
 
-from app.common.aws import create_aws_client
+from app.common.aws import create_aws_client, upload_to_s3
 from app.common.scraper import create_scraper
 
 load_dotenv()
@@ -102,8 +100,7 @@ def scrape_urls(
             products_batch = scrape_one_url(scraper, url, category_name, date)
             all_products.extend(products_batch)
 
-        except Exception as e:
-            # One bad URL should not abort the entire batch
+        except (HTTPError, AttributeError, ValueError) as e:
             logger.error(f"[{category_name}] Failed to scrape {url}: {e}")
 
         time.sleep(URL_SCRAPE_SLEEP_SECONDS)
@@ -112,38 +109,6 @@ def scrape_urls(
         f"[{category_name}] Scraped {len(all_products)} products across {len(urls)} URLs"
     )
     return all_products
-
-
-def create_temp_csv_file(path: str, data: list[dict]) -> None:
-    """Create a temporary CSV file."""
-    os.makedirs(os.path.dirname(path), exist_ok=True)
-
-    with open(path, mode="w", newline="", encoding="utf-8") as csvfile:
-        writer = csv.DictWriter(
-            csvfile, fieldnames=data[0].keys(), quoting=QUOTE_ALL
-        )
-        writer.writeheader()
-        writer.writerows(data)
-
-
-def upload_to_s3(
-    s3_client: BaseClient,
-    category_name: str,
-    date: str,
-    batch_index: int,
-    data: list[dict],
-) -> None:
-    """Write scraped data to a temp CSV file and upload it to S3."""
-
-    s3_key = f"py-pc-components-scraper/scraped-data/{category_name}/{date}/{date}-{category_name}-{batch_index}.csv"
-    tmp_path = f"/tmp/files/{category_name}-{date}-{batch_index}.csv"
-
-    create_temp_csv_file(tmp_path, data)
-
-    s3_client.upload_file(tmp_path, S3_BUCKET, s3_key)
-    logger.info(f"Uploaded to s3://{S3_BUCKET}/{s3_key}")
-
-    os.remove(tmp_path)
 
 
 def handler(event, _context) -> dict:
@@ -178,8 +143,10 @@ def handler(event, _context) -> dict:
         )
 
     s3_client = create_aws_client("s3")
-    upload_to_s3(s3_client, category_name, date, batch_index, products)
+    s3_key = f"py-pc-components-scraper/scraped-data/{category_name}/{date}/{date}-{category_name}-{batch_index}.csv"
+    s3_bucket = S3_BUCKET
 
+    upload_to_s3(s3_client, s3_key, s3_bucket, products)
     logger.info(
         f"[{category_name}] Batch {batch_index} complete — {len(products)} products uploaded"
     )

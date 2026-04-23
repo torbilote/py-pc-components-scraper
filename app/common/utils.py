@@ -1,4 +1,19 @@
+import csv
 import json
+import os
+
+
+def create_temp_csv_file(path: str, data: list[dict]) -> None:
+    """Create a temporary CSV file."""
+    os.makedirs(os.path.dirname(path), exist_ok=True)
+
+    with open(path, mode="w", newline="", encoding="utf-8") as csvfile:
+        writer = csv.DictWriter(
+            csvfile, fieldnames=data[0].keys(), quoting=csv.QUOTE_ALL
+        )
+        writer.writeheader()
+        writer.writerows(data)
+
 
 lambda_invocation_event_obj: dict = {
     "Records": [

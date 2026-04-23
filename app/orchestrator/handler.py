@@ -1,15 +1,13 @@
-import json
 import os
 import time
 
-from botocore.client import BaseClient
 from bs4 import BeautifulSoup
 from cloudscraper import CloudScraper
 from dotenv import load_dotenv
 from loguru import logger
 from requests import Response
 
-from app.common.aws import create_aws_client
+from app.common.aws import create_aws_client, send_message_to_sqs
 from app.common.scraper import create_scraper
 
 load_dotenv()
@@ -73,14 +71,6 @@ def chunk_list(
     return [urls[i : i + batch_size] for i in range(0, len(urls), batch_size)]
 
 
-def send_message_to_sqs(sqs_client: BaseClient, message: dict) -> None:
-    """Send a message to SQS."""
-    sqs_client.send_message(
-        QueueUrl=SQS_QUEUE_URL,
-        MessageBody=json.dumps(message),
-    )
-
-
 def handler(_event, _context) -> int:
     """AWS Lambda entry point."""
     logger.info("Orchestrator started")
@@ -107,7 +97,7 @@ def handler(_event, _context) -> int:
                 "urls": urls_batch,
                 "batch_index": index,
             }
-            send_message_to_sqs(sqs_client, sqs_message)
+            send_message_to_sqs(sqs_client, SQS_QUEUE_URL, sqs_message)
             logger.info(
                 f"[{category_name}] Sent batch {index}/{len(urls_batches)} ({len(urls_batch)} URLs)"
             )

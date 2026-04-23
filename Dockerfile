@@ -15,10 +15,8 @@ RUN uv export --no-dev --no-hashes -o requirements.txt && \
 # Disable development dependencies
 ENV UV_NO_DEV=1
 
-
 # Set the CMD to your handler (could also be done as a parameter override outside of the Dockerfile)
-# TODO verify the handlers' path
-CMD [ "app.orchestrator.handler" ]
+CMD [ "app.orchestrator.handler.handler" ]
 
 
 
