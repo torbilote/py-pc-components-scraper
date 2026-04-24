@@ -23,11 +23,12 @@ PROXIES: list[str] = [
     p for p in [os.environ["PROXY_URL_1"], os.getenv("PROXY_URL_2")] if p
 ]
 
-PRODUCT_CONTAINER_CLASS: str = "gDPdFR"
-PRODUCT_FULL_NAME_CLASS: str = "eyGQAu"
-PRODUCT_PRICE_CLASS: str = "looiKE"
-PRODUCT_ATTRIBUTES_CLASS: str = "hsNyNy"
-
+CLASSES: dict[str, str] = {
+    "product_container": "gDPdFR",
+    "product_full_name": "eyGQAu",
+    "product_price": "looiKE",
+    "product_attributes": "hsNyNy",
+}
 
 def parse_sqs_record(record: dict) -> tuple[dict, datetime]:
     """Extract the message body and sent timestamp from a raw SQS record."""
@@ -38,9 +39,9 @@ def parse_sqs_record(record: dict) -> tuple[dict, datetime]:
     return body, sent_at
 
 
-def parse_product(item: Tag, category_name: str, date: str) -> dict | None:
+def parse_product(item: Tag, category_name: str, date: str, product_classes: dict) -> dict | None:
     """Parse a single product element. Returns None if the name element is missing."""
-    name_el = item.find(class_=PRODUCT_FULL_NAME_CLASS)
+    name_el = item.find(class_=product_classes["product_full_name"])
 
     if not name_el:
         logger.warning(
@@ -48,8 +49,8 @@ def parse_product(item: Tag, category_name: str, date: str) -> dict | None:
         )
         return None
 
-    price_el = item.find(class_=PRODUCT_PRICE_CLASS)
-    attributes_el = item.find(class_=PRODUCT_ATTRIBUTES_CLASS)
+    price_el = item.find(class_=product_classes["product_price"])
+    attributes_el = item.find(class_=product_classes["product_attributes"])
 
     return {
         "category": category_name,
@@ -63,20 +64,20 @@ def parse_product(item: Tag, category_name: str, date: str) -> dict | None:
 
 
 def scrape_one_url(
-    scraper: CloudScraper, url: str, category_name: str, date: str
+    scraper: CloudScraper, url: str, category_name: str, date: str, product_classes: dict
 ) -> list[dict]:
     """Fetch a single listing page and return its parsed products."""
-    response = scraper.get(url, timeout=10)
+    response = scraper.get(url, timeout=30)
     response.raise_for_status()
 
     soup = BeautifulSoup(response.text, "lxml")
-    items = soup.find_all(class_=PRODUCT_CONTAINER_CLASS)
+    items = soup.find_all(class_=product_classes["product_container"])
 
     if not items:
         logger.warning(f"[{category_name}] No products found on {url}")
         return []
 
-    products = [parse_product(item, category_name, date) for item in items]
+    products = [parse_product(item, category_name, date, product_classes) for item in items]
     products_filtered = [p for p in products if p is not None]
 
     logger.info(
@@ -86,7 +87,7 @@ def scrape_one_url(
 
 
 def scrape_urls(
-    scraper: CloudScraper, category_name: str, date: str, urls: list[str]
+    scraper: CloudScraper, category_name: str, date: str, urls: list[str], product_classes: dict, sleep_time: int
 ) -> list[dict]:
     """Scrape all URLs in a batch and return a flat list of products."""
     all_products: list[dict] = []
@@ -97,13 +98,13 @@ def scrape_urls(
         )
 
         try:
-            products_batch = scrape_one_url(scraper, url, category_name, date)
+            products_batch = scrape_one_url(scraper, url, category_name, date, product_classes)
             all_products.extend(products_batch)
 
         except (HTTPError, AttributeError, ValueError) as e:
             logger.error(f"[{category_name}] Failed to scrape {url}: {e}")
 
-        time.sleep(URL_SCRAPE_SLEEP_SECONDS)
+        time.sleep(sleep_time)
 
     logger.info(
         f"[{category_name}] Scraped {len(all_products)} products across {len(urls)} URLs"
@@ -135,7 +136,7 @@ def handler(event, _context) -> dict:
 
     scraper = create_scraper(PROXIES)
     date = sent_at.strftime("%Y%m%d")
-    products = scrape_urls(scraper, category_name, date, urls)
+    products = scrape_urls(scraper, category_name, date, urls, CLASSES, URL_SCRAPE_SLEEP_SECONDS)
 
     if not products:
         raise ValueError(
@@ -144,9 +145,8 @@ def handler(event, _context) -> dict:
 
     s3_client = create_aws_client("s3")
     s3_key = f"py-pc-components-scraper/scraped-data/{category_name}/{date}/{date}-{category_name}-{batch_index}.csv"
-    s3_bucket = S3_BUCKET
 
-    upload_to_s3(s3_client, s3_key, s3_bucket, products)
+    upload_to_s3(s3_client, s3_key, S3_BUCKET, products)
     logger.info(
         f"[{category_name}] Batch {batch_index} complete — {len(products)} products uploaded"
     )

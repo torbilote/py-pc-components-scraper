@@ -67,7 +67,7 @@ def fetch_page_count(
     scraper: CloudScraper, url: str, pagination_class: str
 ) -> int:
     """Fetch the total number of pages for a category listing."""
-    response: Response = scraper.get(url, timeout=10)
+    response: Response = scraper.get(url, timeout=30)
     response.raise_for_status()
 
     soup = BeautifulSoup(response.text, "lxml")
@@ -87,7 +87,7 @@ def generate_urls(base_url: str, page_count: int) -> list[str]:
 
 
 def chunk_list(
-    urls: list[str], batch_size: int = BATCH_SIZE
+    urls: list[str], batch_size: int
 ) -> list[list[str]]:
     """Split a flat list of URLs into fixed-size batches."""
     return [urls[i : i + batch_size] for i in range(0, len(urls), batch_size)]
@@ -109,7 +109,7 @@ def handler(_event, _context) -> int:
         logger.info(f"[{category_name}] {page_count} pages found")
 
         urls = generate_urls(base_url, page_count)
-        urls_batches = chunk_list(urls)
+        urls_batches = chunk_list(urls, BATCH_SIZE)
         logger.info(f"[{category_name}] Created {len(urls_batches)} batches")
 
         for index, urls_batch in enumerate(urls_batches, 1):
