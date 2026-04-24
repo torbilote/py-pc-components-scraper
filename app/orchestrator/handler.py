@@ -17,6 +17,7 @@ os.environ["AWS_REGION"] = "eu-north-1"
 BATCH_SIZE: int = 100
 SQS_QUEUE_URL: str = os.environ["SQS_QUEUE_URL"]
 CATEGORY_SLEEP_SECONDS: float = 5.0
+PAGINATION_CLASS: str = "eqRsIL"
 
 PROXIES: list[str] = [
     p for p in [os.environ["PROXY_URL_1"], os.getenv("PROXY_URL_2")] if p
@@ -26,17 +27,38 @@ CATEGORIES: list[dict] = [
     {
         "name": "gpu",
         "base_url": "https://www.x-kom.pl/g-5/c/345-karty-graficzne.html",
-        "pagination_class": "eqRsIL",
     },
     {
         "name": "cpu",
         "base_url": "https://www.x-kom.pl/g-5/c/11-procesory.html",
-        "pagination_class": "eqRsIL",
     },
     {
         "name": "ssd",
         "base_url": "https://www.x-kom.pl/g-5/c/1779-dyski-ssd.html",
-        "pagination_class": "eqRsIL",
+    },
+    {
+        "name": "hdd",
+        "base_url": "https://www.x-kom.pl/g-5/c/1580-dyski-hdd.html",
+    },
+    {
+        "name": "ram",
+        "base_url": "https://www.x-kom.pl/g-5/c/28-pamieci-ram.html",
+    },
+    {
+        "name": "mobo",
+        "base_url": "https://www.x-kom.pl/g-5/c/14-plyty-glowne.html",
+    },
+    {
+        "name": "liquid_cooler",
+        "base_url": "https://www.x-kom.pl/g-5/c/2650-chlodzenia-wodne.html",
+    },
+    {
+        "name": "air_cooler",
+        "base_url": "https://www.x-kom.pl/g-5/c/105-chlodzenia-procesorow.html",
+    },
+    {
+        "name": "case",
+        "base_url": "https://www.x-kom.pl/g-5/c/389-obudowy-do-komputera.html",
     },
 ]
 
@@ -81,10 +103,9 @@ def handler(_event, _context) -> int:
     for category in CATEGORIES:
         category_name = category["name"]
         base_url = category["base_url"]
-        pagination_class = category["pagination_class"]
         logger.info(f"Processing category: {category_name}")
 
-        page_count = fetch_page_count(scraper, base_url, pagination_class)
+        page_count = fetch_page_count(scraper, base_url, PAGINATION_CLASS)
         logger.info(f"[{category_name}] {page_count} pages found")
 
         urls = generate_urls(base_url, page_count)
