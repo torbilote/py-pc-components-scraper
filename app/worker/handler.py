@@ -24,8 +24,8 @@ PROXIES: list[str] = [
 ]
 
 CLASSES: dict[str, str] = {
-    "product_container": "gDPdFR",
-    "product_full_name": "eyGQAu",
+    "product_container": "ciPqqJ",
+    "product_full_name": "dqVpgQ",
     "product_price": "looiKE",
     "product_attributes": "hsNyNy",
 }
