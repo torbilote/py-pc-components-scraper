@@ -1,5 +1,3 @@
-notes.md
-
 # Byte-compiled / optimized / DLL files
 __pycache__/
 *.py[codz]
@@ -145,6 +143,10 @@ venv/
 ENV/
 env.bak/
 venv.bak/
+
+# Scraper output
+/data/*
+!/data/.gitkeep
 
 # Spyder project settings
 .spyderproject

@@ -1,22 +1,14 @@
-FROM public.ecr.aws/lambda/python:3.13
+FROM python:3.13-slim
 
 # Install uv and uvx from the official image
 COPY --from=ghcr.io/astral-sh/uv:latest /uv /uvx /bin/
 
-# Copy the function code to the image
-COPY . ${LAMBDA_TASK_ROOT}
+WORKDIR /app
 
-# Install the function's dependencies using uv into the Lambda task root
-RUN uv export --no-dev --no-hashes -o requirements.txt && \
-    uv pip install -r requirements.txt \
-    --target ${LAMBDA_TASK_ROOT} \
-    --no-cache
+# Install dependencies (README.md is required by the build backend's metadata)
+COPY pyproject.toml uv.lock README.md ./
+COPY src ./src
 
-# Disable development dependencies
-ENV UV_NO_DEV=1
+RUN uv sync --frozen --no-dev
 
-# Set the CMD to your handler (could also be done as a parameter override outside of the Dockerfile)
-CMD [ "app.orchestrator.handler.handler" ]
-
-
-
+ENTRYPOINT ["/app/.venv/bin/python", "-m", "pc_scraper"]
