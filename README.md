@@ -72,15 +72,26 @@ or, using the installed console script:
 uv run pc-scraper
 ```
 
-By default this scrapes every category. To scrape just one, pass its name
-as an argument:
+By default this scrapes every category. To scrape only specific ones, pass
+their names to `--select`:
 
 ```bash
-uv run python -m pc_scraper gpu
+uv run python -m pc_scraper --select gpu cpu
 ```
 
+Or scrape every category except some, with `--exclude`:
+
+```bash
+uv run python -m pc_scraper --exclude gpu cpu
+```
+
+Both can be combined, e.g. `--select gpu cpu --exclude ram`. Category
+names must always follow one of these two flags — a bare category name
+with no flag (e.g. `pc_scraper gpu`) is rejected.
+
 Valid category names are listed in [What it scrapes](#what-it-scrapes); an
-invalid one is rejected with a usage error before any requests are made.
+invalid one (in either list) is rejected with a usage error before any
+requests are made.
 
 Each run writes one CSV file per scraped category to:
 
@@ -104,10 +115,12 @@ Run it, mounting the `data` folder so results land on your host machine:
 docker run --rm -v "$(pwd)/data:/app/data" pc-scraper
 ```
 
-To scrape a single category, pass its name after the image name:
+To scrape specific categories (or exclude some), pass the same arguments
+after the image name:
 
 ```bash
-docker run --rm -v "$(pwd)/data:/app/data" pc-scraper gpu
+docker run --rm -v "$(pwd)/data:/app/data" pc-scraper --select gpu cpu
+docker run --rm -v "$(pwd)/data:/app/data" pc-scraper --exclude gpu cpu
 ```
 
 > **Windows + Git Bash:** Git Bash auto-rewrites POSIX-style paths before

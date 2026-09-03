@@ -27,11 +27,11 @@ _PAGINATION_HTML = (
 )
 
 
-def _fake_response(text: str, *, ok: bool = True) -> Mock:
+def _fake_response(text: str, *, ok: bool = True, error: str = "boom") -> Mock:
     response = Mock()
     response.text = text
     response.raise_for_status = Mock(
-        side_effect=None if ok else HTTPError("boom")
+        side_effect=None if ok else HTTPError(error)
     )
     return response
 
@@ -60,7 +60,9 @@ def test_fetch_page_count_parses_pagination_from_response() -> None:
     scraper = Mock()
     scraper.get.return_value = _fake_response(html)
 
-    page_count = fetch_page_count(scraper, "https://example.com/cat.html")
+    page_count = fetch_page_count(
+        scraper, "https://example.com/cat.html", "gpu"
+    )
 
     assert page_count == 3
     scraper.get.assert_called_once_with(
@@ -68,12 +70,51 @@ def test_fetch_page_count_parses_pagination_from_response() -> None:
     )
 
 
-def test_fetch_page_count_raises_on_http_error() -> None:
+def test_fetch_page_count_retries_transient_http_error_then_succeeds(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    monkeypatch.setattr("pc_scraper.scraping.time.sleep", lambda *_: None)
+    scraper = Mock()
+    scraper.get.side_effect = [
+        _fake_response("", ok=False),
+        _fake_response(_PAGINATION_HTML),
+    ]
+
+    page_count = fetch_page_count(
+        scraper, "https://example.com/cat.html", "gpu"
+    )
+
+    assert page_count == 2
+    assert scraper.get.call_count == 2
+
+
+def test_fetch_page_count_raises_after_exhausting_retries(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    monkeypatch.setattr("pc_scraper.scraping.time.sleep", lambda *_: None)
     scraper = Mock()
     scraper.get.return_value = _fake_response("", ok=False)
 
     with pytest.raises(HTTPError):
-        fetch_page_count(scraper, "https://example.com/cat.html")
+        fetch_page_count(scraper, "https://example.com/cat.html", "gpu")
+
+    assert scraper.get.call_count == MAX_PAGE_FETCH_ATTEMPTS
+
+
+def test_fetch_page_count_sleeps_only_between_retry_attempts(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    sleep_mock = Mock()
+    monkeypatch.setattr("pc_scraper.scraping.time.sleep", sleep_mock)
+    scraper = Mock()
+    scraper.get.side_effect = [
+        _fake_response("", ok=False),
+        _fake_response(_PAGINATION_HTML),
+    ]
+
+    fetch_page_count(scraper, "https://example.com/cat.html", "gpu")
+
+    sleep_mock.assert_called_once_with(RETRY_BACKOFF_SECONDS)
 
 
 def test_scrape_page_returns_parsed_products() -> None:
@@ -113,6 +154,37 @@ def test_scrape_page_retries_transient_http_error_then_succeeds(
     scraper = Mock()
     scraper.get.side_effect = [
         _fake_response("", ok=False),
+        _fake_response(_PAGE_HTML),
+    ]
+
+    products = scrape_page(
+        scraper, "https://example.com/p1", "gpu", "20260101"
+    )
+
+    assert len(products) == 1
+    assert scraper.get.call_count == 2
+
+
+def test_scrape_page_retries_503_service_unavailable_then_succeeds(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """Regression test for a real 503 seen from x-kom.pl in production.
+
+    HTTPError is raised identically by raise_for_status() regardless of
+    status code, so this is handled by the same generic retry path as a
+    404 — this test just pins that down concretely for this exact case.
+    """
+    monkeypatch.setattr("pc_scraper.scraping.time.sleep", lambda *_: None)
+    scraper = Mock()
+    scraper.get.side_effect = [
+        _fake_response(
+            "",
+            ok=False,
+            error=(
+                "503 Server Error: Service Unavailable for url: "
+                "https://example.com/p1"
+            ),
+        ),
         _fake_response(_PAGE_HTML),
     ]
 

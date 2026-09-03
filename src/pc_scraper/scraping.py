@@ -1,6 +1,7 @@
 """Per-category scraping: page discovery, fetching, and parsing."""
 
 import time
+from typing import cast
 
 from cloudscraper import CloudScraper
 from loguru import logger
@@ -16,25 +17,13 @@ from pc_scraper.config import (
 from pc_scraper.parsing import parse_listing_page, parse_page_count
 
 
-def fetch_page_count(scraper: CloudScraper, url: str) -> int:
-    """Fetch a category's base listing page and return its total page count."""
-    response = scraper.get(url, timeout=REQUEST_TIMEOUT_SECONDS)
-    response.raise_for_status()
-    return parse_page_count(response.text)
+def _fetch_html_with_retries(
+    scraper: CloudScraper, url: str, category_name: str
+) -> str:
+    """Fetch a URL's HTML, retrying a bounded number of times on HTTP errors.
 
-
-def generate_page_urls(base_url: str, page_count: int) -> list[str]:
-    """Generate paginated listing URLs for all pages of a category."""
-    return [f"{base_url}?page={i}" for i in range(1, page_count + 1)]
-
-
-def scrape_page(
-    scraper: CloudScraper, url: str, category_name: str, date: str
-) -> list[dict[str, str]]:
-    """Fetch and parse a single listing page.
-
-    Retries a bounded number of times on HTTP errors, since x-kom.pl
-    occasionally returns a transient error for an otherwise-valid page.
+    x-kom.pl occasionally returns a transient error (e.g. a stray 404) for
+    an otherwise-valid page; retrying avoids losing data to a one-off blip.
     """
     attempt = 1
     while True:
@@ -51,11 +40,30 @@ def scrape_page(
             time.sleep(RETRY_BACKOFF_SECONDS)
             attempt += 1
         else:
-            products = parse_listing_page(response.text, category_name, date)
-            logger.info(
-                f"[{category_name}] {url} -> {len(products)} products parsed"
-            )
-            return products
+            return cast(str, response.text)
+
+
+def fetch_page_count(
+    scraper: CloudScraper, url: str, category_name: str
+) -> int:
+    """Fetch a category's base listing page and return its total page count."""
+    html = _fetch_html_with_retries(scraper, url, category_name)
+    return parse_page_count(html)
+
+
+def generate_page_urls(base_url: str, page_count: int) -> list[str]:
+    """Generate paginated listing URLs for all pages of a category."""
+    return [f"{base_url}?page={i}" for i in range(1, page_count + 1)]
+
+
+def scrape_page(
+    scraper: CloudScraper, url: str, category_name: str, date: str
+) -> list[dict[str, str]]:
+    """Fetch and parse a single listing page."""
+    html = _fetch_html_with_retries(scraper, url, category_name)
+    products = parse_listing_page(html, category_name, date)
+    logger.info(f"[{category_name}] {url} -> {len(products)} products parsed")
+    return products
 
 
 def scrape_category(
@@ -63,7 +71,7 @@ def scrape_category(
 ) -> list[dict[str, str]]:
     """Scrape every listing page for a single category."""
     logger.info(f"[{category.name}] Fetching page count")
-    page_count = fetch_page_count(scraper, category.base_url)
+    page_count = fetch_page_count(scraper, category.base_url, category.name)
     urls = generate_page_urls(category.base_url, page_count)
     logger.info(f"[{category.name}] {page_count} pages found")
 

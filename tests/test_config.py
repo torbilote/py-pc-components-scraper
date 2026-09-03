@@ -17,7 +17,7 @@ _CSS_CLASS_ENV_VARS = [
 
 
 @contextmanager
-def _temporary_env(name: str, value: str | None) -> Generator[None, None, None]:
+def _temporary_env(name: str, value: str | None) -> Generator[None]:
     """Set (or unset) an env var, restoring the original value afterwards."""
     original = os.environ.get(name)
     if value is None:
