@@ -168,7 +168,7 @@ def test_scrape_page_retries_transient_http_error_then_succeeds(
 def test_scrape_page_retries_503_service_unavailable_then_succeeds(
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
-    """Regression test for a real 503 seen from x-kom.pl in production.
+    """Regression test for a real 503 seen from the target website in prod.
 
     HTTPError is raised identically by raise_for_status() regardless of
     status code, so this is handled by the same generic retry path as a

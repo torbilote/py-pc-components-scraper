@@ -1,11 +1,17 @@
 """Shared pytest fixtures.
 
-Tests use fixed, test-only CSS class names instead of the real x-kom.pl
-classes (which change on every site redeploy) so that updating a
-production selector in config.py never breaks the unit test suite.
+Tests use fixed, test-only CSS class names instead of the real target
+website classes (which change on every site redeploy) so that updating a
+production selector in config.py never breaks the unit test suite. The
+same applies to TARGET_BASE_URL below: tests must not depend on the real
+target site's domain, which is deliberately not committed to this repo.
 """
 
-import pytest
+import os
+
+os.environ.setdefault("TARGET_BASE_URL", "https://example.com")
+
+import pytest  # noqa: E402
 
 TEST_PRODUCT_CONTAINER_CLASS = "test-product-container"
 TEST_PRODUCT_NAME_CLASS = "test-product-name"

@@ -1,4 +1,4 @@
-"""Factory for the cloudscraper session used to fetch x-kom.pl pages."""
+"""Factory for the cloudscraper session used to fetch target-website pages."""
 
 import cloudscraper
 

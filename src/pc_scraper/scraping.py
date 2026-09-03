@@ -22,7 +22,7 @@ def _fetch_html_with_retries(
 ) -> str:
     """Fetch a URL's HTML, retrying a bounded number of times on HTTP errors.
 
-    x-kom.pl occasionally returns a transient error (e.g. a stray 404) for
+    The target website occasionally returns a transient error (e.g. a 404) for
     an otherwise-valid page; retrying avoids losing data to a one-off blip.
     """
     attempt = 1

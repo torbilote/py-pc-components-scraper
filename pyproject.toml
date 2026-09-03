@@ -1,7 +1,7 @@
 [project]
 name = "py-pc-components-scraper"
 version = "0.2.0"
-description = "Local CLI scraper that collects PC component prices and specs from x-kom.pl into local CSV files."
+description = "Local CLI scraper that collects PC component prices and specs from a target website into local CSV files."
 readme = "README.md"
 requires-python = ">=3.13"
 dependencies = [

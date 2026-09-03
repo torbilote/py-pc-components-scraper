@@ -16,7 +16,7 @@ from pc_scraper.storage import save_products_csv
 def parse_args(argv: list[str] | None) -> argparse.Namespace:
     category_names = [category.name for category in CATEGORIES]
     parser = argparse.ArgumentParser(
-        description="Scrape PC component listings from x-kom.pl."
+        description="Scrape PC component listings from the target website."
     )
     parser.add_argument(
         "--select",

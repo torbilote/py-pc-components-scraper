@@ -1,9 +1,13 @@
 # py-pc-components-scraper
 
 A command-line scraper that collects PC component prices and specifications
-from [x-kom.pl](https://www.x-kom.pl) and saves the results as CSV files on
-your local machine. It is triggered manually, has no external infrastructure
+from a target website and saves the results as CSV files on your local
+machine. It is triggered manually, has no external infrastructure
 dependencies, and runs the same way locally or in Docker.
+
+The scraped site's domain is intentionally not committed to this
+repository — it is injected at runtime via the `TARGET_BASE_URL`
+environment variable (see [Configuration](#configuration)).
 
 ## What it scrapes
 
@@ -40,23 +44,29 @@ The scraper reads its configuration from environment variables (loaded from
 a local `.env` file if present). Create one at the repository root:
 
 ```bash
+TARGET_BASE_URL=
 DATA_DIR=
 ```
 
-| Variable                        | Required | Description                                                 |
-| -------------------------------- | -------- | ------------------------------------------------------------ |
-| `DATA_DIR`                       | No       | Directory CSV output is written to (default: `./data`)       |
-| `XKOM_PRODUCT_CONTAINER_CLASS`   | No       | CSS class of each product card on a listing page              |
-| `XKOM_PRODUCT_NAME_CLASS`        | No       | CSS class of a product's name element                          |
-| `XKOM_PRODUCT_PRICE_CLASS`       | No       | CSS class of a product's price element                         |
-| `XKOM_PRODUCT_ATTRIBUTES_CLASS`  | No       | CSS class of a product's attributes element                    |
-| `XKOM_PAGINATION_CLASS`          | No       | CSS class of the pagination page-number elements                |
+| Variable                          | Required | Description                                                |
+| ---------------------------------- | -------- | ------------------------------------------------------------ |
+| `TARGET_BASE_URL`                 | **Yes**  | Base URL of the site to scrape (e.g. `https://example.com`)  |
+| `DATA_DIR`                        | No       | Directory CSV output is written to (default: `./data`)      |
+| `TARGET_PRODUCT_CONTAINER_CLASS`  | No       | CSS class of each product card on a listing page             |
+| `TARGET_PRODUCT_NAME_CLASS`       | No       | CSS class of a product's name element                         |
+| `TARGET_PRODUCT_PRICE_CLASS`      | No       | CSS class of a product's price element                        |
+| `TARGET_PRODUCT_ATTRIBUTES_CLASS` | No       | CSS class of a product's attributes element                   |
+| `TARGET_PAGINATION_CLASS`         | No       | CSS class of the pagination page-number elements               |
 
-x-kom.pl's CSS class names are hashed and change whenever the site's
+`TARGET_BASE_URL` has no default and is not committed anywhere in this
+repository on purpose — the scraper refuses to start without it. Set it in
+your local `.env` to the real site's base URL.
+
+The target site's CSS class names are hashed and change whenever its
 frontend is redeployed, which will eventually break scraping. Rather than
-editing code and rebuilding the Docker image, set the `XKOM_*` variables
-above to the new class names (inspect the site's current markup to find
-them) and rerun — no rebuild required.
+editing code and rebuilding the Docker image, set the `TARGET_*` class
+variables above to the new class names (inspect the site's current markup
+to find them) and rerun — no rebuild required.
 
 ## Usage
 
@@ -136,11 +146,11 @@ rebuilding the image, in any of three ways:
 
 ```bash
 # 1. Explicit value
-docker run --rm -e XKOM_PAGINATION_CLASS=newHash -v "$(pwd)/data:/app/data" pc-scraper
+docker run --rm -e TARGET_PAGINATION_CLASS=newHash -v "$(pwd)/data:/app/data" pc-scraper
 
 # 2. Forward a variable already set in your shell (name only, no "=value")
-export XKOM_PAGINATION_CLASS=newHash
-docker run --rm -e XKOM_PAGINATION_CLASS -v "$(pwd)/data:/app/data" pc-scraper
+export TARGET_PAGINATION_CLASS=newHash
+docker run --rm -e TARGET_PAGINATION_CLASS -v "$(pwd)/data:/app/data" pc-scraper
 
 # 3. Load every variable from a file
 docker run --rm --env-file .env -v "$(pwd)/data:/app/data" pc-scraper
@@ -172,5 +182,6 @@ tests/                # unit tests for every module above
 ## Notes
 
 This project scrapes a third-party website. Requests are throttled (short
-sleeps between pages and categories) to be considerate of x-kom.pl's
-servers. Make sure your use complies with the site's terms of service.
+sleeps between pages and categories) to be considerate of the target
+site's servers. Make sure your use complies with the site's terms of
+service.

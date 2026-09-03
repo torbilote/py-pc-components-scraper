@@ -8,11 +8,11 @@ import pytest
 import pc_scraper.config as config_module
 
 _CSS_CLASS_ENV_VARS = [
-    ("XKOM_PRODUCT_CONTAINER_CLASS", "PRODUCT_CONTAINER_CLASS", "KWQcA"),
-    ("XKOM_PRODUCT_NAME_CLASS", "PRODUCT_NAME_CLASS", "jNOIct"),
-    ("XKOM_PRODUCT_PRICE_CLASS", "PRODUCT_PRICE_CLASS", "fDzLzF"),
-    ("XKOM_PRODUCT_ATTRIBUTES_CLASS", "PRODUCT_ATTRIBUTES_CLASS", "iOXoLL"),
-    ("XKOM_PAGINATION_CLASS", "PAGINATION_CLASS", "jTuhUe"),
+    ("TARGET_PRODUCT_CONTAINER_CLASS", "PRODUCT_CONTAINER_CLASS", "KWQcA"),
+    ("TARGET_PRODUCT_NAME_CLASS", "PRODUCT_NAME_CLASS", "jNOIct"),
+    ("TARGET_PRODUCT_PRICE_CLASS", "PRODUCT_PRICE_CLASS", "fDzLzF"),
+    ("TARGET_PRODUCT_ATTRIBUTES_CLASS", "PRODUCT_ATTRIBUTES_CLASS", "iOXoLL"),
+    ("TARGET_PAGINATION_CLASS", "PAGINATION_CLASS", "jTuhUe"),
 ]
 
 
@@ -60,3 +60,26 @@ def test_css_class_overridden_by_env(
     with _temporary_env(env_var, "overriddenHash"):
         reloaded = importlib.reload(config_module)
         assert getattr(reloaded, attr) == "overriddenHash"
+
+
+def test_target_base_url_read_from_env() -> None:
+    with _temporary_env("TARGET_BASE_URL", "https://scraped-site.example"):
+        reloaded = importlib.reload(config_module)
+        assert reloaded.TARGET_BASE_URL == "https://scraped-site.example"
+
+
+def test_target_base_url_strips_trailing_slash() -> None:
+    with _temporary_env("TARGET_BASE_URL", "https://scraped-site.example/"):
+        reloaded = importlib.reload(config_module)
+        assert reloaded.TARGET_BASE_URL == "https://scraped-site.example"
+
+
+def test_target_base_url_raises_when_unset(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    # A developer's local .env may set this too; ignore it here so this
+    # test's result only depends on the process environment.
+    monkeypatch.setattr("dotenv.load_dotenv", lambda *a, **k: None)
+    with _temporary_env("TARGET_BASE_URL", None):
+        with pytest.raises(RuntimeError, match="TARGET_BASE_URL"):
+            importlib.reload(config_module)

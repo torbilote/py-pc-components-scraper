@@ -1,4 +1,4 @@
-"""HTML parsing for x-kom.pl listing pages and product cards."""
+"""HTML parsing for the target website's listing pages and product cards."""
 
 from bs4 import BeautifulSoup, Tag
 from loguru import logger
